@@ -19,8 +19,6 @@ const tempValue = document.getElementById('temp-value');
 const tempHint = document.getElementById('temp-hint');
 const tokensSlider = document.getElementById('tokens-slider');
 const tokensValue = document.getElementById('tokens-value');
-const hwInfoText = document.getElementById('hw-info-text');
-
 const inputTokensEl = document.getElementById('input-tokens');
 const ctxUsedEl = document.getElementById('ctx-used');
 const ctxMaxEl = document.getElementById('ctx-max');
@@ -159,19 +157,6 @@ function updateRam() {
     .then(r => r.json())
     .then(d => {
       ramInfo.textContent = `RAM: ${d.used} MB / ${d.total} MB (${d.percent}%)`;
-      hwInfoText.textContent = '';
-      const lines = [
-        `CPU: ${d.cpuModel}`,
-        `Ядер: ${d.cores}`,
-        `RAM: ${(d.total / 1024).toFixed(1)} GB`,
-        `Свободно: ${(d.free / 1024).toFixed(1)} GB`,
-        '',
-        'Рекомендации:',
-        '- Квантование: Q4_K_M',
-        '- Max tokens: до 1024',
-        '- CPU-only режим'
-      ];
-      hwInfoText.textContent = lines.join('\n');
     })
     .catch(() => {});
 }
