@@ -295,6 +295,8 @@ function setLoading(loading) {
   messageInput.disabled = loading;
 }
 
+let currentRequestId = null;
+
 function sendMessage() {
   const text = messageInput.value.trim();
   if (!text) return;
@@ -317,16 +319,6 @@ function sendMessage() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message: text, ...settings })
   }).then(async (response) => {
-    if (response.status === 429) {
-      const err = await response.json();
-      setStatus(err.error);
-      setLoading(false);
-      cancelBtn.classList.add('hidden');
-      stopTimer();
-      showTimer(false);
-      return;
-    }
-
     if (response.status === 503) {
       const err = await response.json();
       showError(err.error, err.instructions);
@@ -368,6 +360,9 @@ function sendMessage() {
           try {
             const event = JSON.parse(jsonStr);
             switch (event.type) {
+              case 'requestId':
+                currentRequestId = event.id;
+                break;
               case 'token':
                 if (!llmMessage) {
                   llmMessage = addMessage('', 'llm');
@@ -398,6 +393,7 @@ function sendMessage() {
       }
     }
 
+    currentRequestId = null;
     setLoading(false);
     cancelBtn.classList.add('hidden');
   }).catch((err) => {
@@ -411,7 +407,14 @@ function sendMessage() {
 }
 
 function cancelGeneration() {
-  fetch('/api/cancel', { method: 'POST' }).catch(() => {});
+  if (currentRequestId) {
+    fetch('/api/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId: currentRequestId })
+    }).catch(() => {});
+  }
+  currentRequestId = null;
   setStatus('Генерация отменена');
   setLoading(false);
   cancelBtn.classList.add('hidden');

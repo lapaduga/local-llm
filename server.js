@@ -19,9 +19,7 @@ const MODEL_TAG = MODEL_BASE;
 const NUM_CTX = 8192;
 const NUM_BATCH = 512;
 
-let isGenerating = false;
-let cancelRequested = false;
-let currentAbortController = null;
+const activeRequests = new Map();
 
 function logRamUsage() {
   const free = os.freemem();
@@ -103,10 +101,6 @@ function buildPrompt(userMessage) {
 }
 
 app.post('/api/chat', async (req, res) => {
-  if (isGenerating) {
-    return res.status(429).json({ error: 'Модель занята, подождите завершения текущего запроса' });
-  }
-
   const { message, temperature, maxTokens } = req.body;
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
@@ -128,6 +122,10 @@ app.post('/api/chat', async (req, res) => {
     });
   }
 
+  const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const abortController = new AbortController();
+  activeRequests.set(requestId, abortController);
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -135,19 +133,15 @@ app.post('/api/chat', async (req, res) => {
     'X-Accel-Buffering': 'no'
   });
 
+  sseJson(res, { type: 'requestId', id: requestId });
+
   const modelReady = await ensureModel(res, MODEL_TAG);
   if (!modelReady) {
     sseJson(res, { type: 'error', text: 'Не удалось подготовить модель' });
+    activeRequests.delete(requestId);
     res.end();
     return;
   }
-
-  isGenerating = true;
-  cancelRequested = false;
-  currentAbortController = new AbortController();
-
-  sseJson(res, { type: 'status', text: 'Загрузка модели в RAM...' });
-  logRamUsage();
 
   const startTime = Date.now();
   const safeTemp = Math.max(0, Math.min(2, parseFloat(temperature) || 0.8));
@@ -175,14 +169,12 @@ app.post('/api/chat', async (req, res) => {
           keep_alive: -1
         }
       }),
-      signal: currentAbortController.signal
+      signal: abortController.signal
     });
 
     if (!ollamaRes.ok) {
-      const errText = await ollamaRes.text();
       sseJson(res, { type: 'error', text: 'Ошибка модели. Попробуйте ещё раз' });
-      isGenerating = false;
-      currentAbortController = null;
+      activeRequests.delete(requestId);
       res.end();
       return;
     }
@@ -195,11 +187,6 @@ app.post('/api/chat', async (req, res) => {
     let fullResponse = '';
 
     while (true) {
-      if (cancelRequested) {
-        reader.cancel();
-        break;
-      }
-
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -220,9 +207,7 @@ app.post('/api/chat', async (req, res) => {
             const tokens = parsed.eval_count || 0;
             sseJson(res, { type: 'done', elapsed, tokens, fullResponse });
           }
-        } catch {
-          // skip unparseable lines
-        }
+        } catch {}
       }
     }
   } catch (err) {
@@ -233,20 +218,18 @@ app.post('/api/chat', async (req, res) => {
     }
   }
 
-  isGenerating = false;
-  currentAbortController = null;
-
+  activeRequests.delete(requestId);
   sseJson(res, { type: 'status', text: 'Готово' });
   res.end();
 });
 
 app.post('/api/cancel', (req, res) => {
-  if (currentAbortController) {
-    cancelRequested = true;
-    currentAbortController.abort();
-    currentAbortController = null;
+  const { requestId } = req.body;
+  const controller = activeRequests.get(requestId);
+  if (controller) {
+    controller.abort();
+    activeRequests.delete(requestId);
   }
-  isGenerating = false;
   res.json({ ok: true });
 });
 
