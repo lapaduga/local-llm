@@ -207,59 +207,10 @@ function renderMarkdown(text) {
   });
 
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-  html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
-  html = html.replace(/^---+$/gm, '<hr>');
-
-  html = html.replace(/^\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-
-  const lines = html.split('\n');
-  const result = [];
-  let inOl = false;
-  let inUl = false;
-
-  for (const line of lines) {
-    const olMatch = line.match(/^(\d+)\.\s+(.*)$/);
-    const ulMatch = line.match(/^[-*]\s+(.*)$/);
-
-    if (olMatch) {
-      if (!inOl) { if (inUl) { result.push('</ul>'); inUl = false; } result.push('<ol>'); inOl = true; }
-      result.push(`<li>${olMatch[2]}</li>`);
-    } else if (ulMatch) {
-      if (!inUl) { if (inOl) { result.push('</ol>'); inOl = false; } result.push('<ul>'); inUl = true; }
-      result.push(`<li>${ulMatch[1]}</li>`);
-    } else {
-      if (inOl) { result.push('</ol>'); inOl = false; }
-      if (inUl) { result.push('</ul>'); inUl = false; }
-      result.push(line);
-    }
-  }
-  if (inOl) result.push('</ol>');
-  if (inUl) result.push('</ul>');
-
-  html = result.join('\n');
-
   html = html.replace(/\n/g, '<br>');
-  html = html.replace(/<br>(<h[123]>)/g, '$1');
-  html = html.replace(/(<\/h[123]>)<br>/g, '$1');
-  html = html.replace(/<br>(<pre>)/g, '$1');
-  html = html.replace(/(<\/pre>)<br>/g, '$1');
-  html = html.replace(/<br>(<ol>)/g, '$1');
-  html = html.replace(/(<\/ol>)<br>/g, '$1');
-  html = html.replace(/<br>(<ul>)/g, '$1');
-  html = html.replace(/(<\/ul>)<br>/g, '$1');
-  html = html.replace(/<br>(<blockquote>)/g, '$1');
-  html = html.replace(/(<\/blockquote>)<br>/g, '$1');
-  html = html.replace(/<br>(<hr>)/g, '$1');
-  html = html.replace(/(<hr>)<br>/g, '$1');
 
   return html;
 }
