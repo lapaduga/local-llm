@@ -147,12 +147,12 @@ app.post('/api/chat', async (req, res) => {
   sseJson(res, { type: 'status', text: `Модель: ${MODEL_TAG} | temp=${safeTemp} | tokens=${safeTokens} | ctx=${NUM_CTX}` });
 
   try {
-    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/generate`, {
+    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL_TAG,
-        prompt: prompt,
+        messages: [{ role: 'user', content: prompt }],
         stream: true,
         options: {
           num_gpu: 0,
@@ -194,10 +194,13 @@ app.post('/api/chat', async (req, res) => {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
-          if (parsed.response) {
-            const token = parsed.response
+          if (parsed.message && parsed.message.content) {
+            const token = parsed.message.content
               .replace(/\\\n/g, '\n')
-              .replace(/\\n/g, '\n');
+              .replace(/\\n/g, '\n')
+              .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
+              .replace(/([а-яё])(\.)/g, '$1 $2')
+              .replace(/([а-яё])(,)/g, '$1 $2');
             fullResponse += token;
             sseJson(res, { type: 'token', content: token });
           }
@@ -207,7 +210,11 @@ app.post('/api/chat', async (req, res) => {
             const cleaned = fullResponse
               .replace(/\\\n/g, '\n')
               .replace(/\\n/g, '\n')
-              .replace(/\n{3,}/g, '\n\n');
+              .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
+              .replace(/([а-яё])(\.)/g, '$1 $2')
+              .replace(/([а-яё])(,)/g, '$1 $2')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
             sseJson(res, { type: 'done', elapsed, tokens, fullResponse: cleaned });
           }
         } catch {}
@@ -242,10 +249,10 @@ async function preloadModel() {
   try {
     console.log(`[INFO] Preloading model ${MODEL_TAG}...`);
     const start = Date.now();
-    await fetch(`${OLLAMA_HOST}/api/generate`, {
+    await fetch(`${OLLAMA_HOST}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL_TAG, prompt: 'hi', keep_alive: -1, options: { num_ctx: NUM_CTX, num_predict: 1 } })
+      body: JSON.stringify({ model: MODEL_TAG, messages: [{ role: 'user', content: 'hi' }], keep_alive: -1, options: { num_ctx: NUM_CTX, num_predict: 1 } })
     });
     console.log(`[INFO] Model loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
   } catch {}
