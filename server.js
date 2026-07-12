@@ -195,14 +195,8 @@ app.post('/api/chat', async (req, res) => {
         try {
           const parsed = JSON.parse(line);
           if (parsed.message && parsed.message.content) {
-            const token = parsed.message.content
-              .replace(/\\\n/g, '\n')
-              .replace(/\\n/g, '\n')
-              .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
-              .replace(/([.!?])([А-ЯЁ])/g, '$1\n\n$2')
-              .replace(/,([А-ЯЁ])/g, ',\n$1');
-            fullResponse += token;
-            sseJson(res, { type: 'token', content: token });
+            fullResponse += parsed.message.content;
+            sseJson(res, { type: 'token', content: parsed.message.content });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
