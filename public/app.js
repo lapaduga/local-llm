@@ -431,7 +431,7 @@ cancelBtn.addEventListener('click', cancelGeneration);
 clearBtn.addEventListener('click', () => {
   messagesEl.innerHTML = `
     <div class="message llm welcome-msg">
-      Привет! Я RizzGPT — генератор юмористических подкатов. Опиши ситуацию или девушку, а я предложу 3 дерзких варианта с рейтингом.
+      Привет! Я генератор хокку. Напиши тему — получишь 3 стихотворения хокку.
     </div>
   `;
   hideError();
