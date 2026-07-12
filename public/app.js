@@ -151,16 +151,6 @@ messageInput.addEventListener('input', updateInputTokenCount);
 // Initial context bar
 updateContextBar(PROMPT_TEMPLATE_OVERHEAD);
 
-function cleanText(text) {
-  return text
-    .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
-    .replace(/([.!?])([А-ЯЁ])/g, '$1\n\n$2')
-    .replace(/,([А-ЯЁ])/g, ',\n$1')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/ +/g, ' ')
-    .trim();
-}
-
 // RAM stats
 function updateRam() {
   fetch('/api/stats')
@@ -329,7 +319,7 @@ function sendMessage() {
                   llmMessage = addMessage('', 'llm');
                 }
                 llmMessage.textContent += event.content;
-                llmMessage.innerHTML = renderMarkdown(cleanText(llmMessage.textContent));
+                llmMessage.innerHTML = renderMarkdown(llmMessage.textContent);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
                 break;
               case 'status':

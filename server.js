@@ -201,15 +201,7 @@ app.post('/api/chat', async (req, res) => {
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const tokens = parsed.eval_count || 0;
-            const cleaned = fullResponse
-              .replace(/\\\n/g, '\n')
-              .replace(/\\n/g, '\n')
-              .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
-              .replace(/([.!?])([А-ЯЁ])/g, '$1\n\n$2')
-              .replace(/,([А-ЯЁ])/g, ',\n$1')
-              .replace(/\n{3,}/g, '\n\n')
-              .trim();
-            sseJson(res, { type: 'done', elapsed, tokens, fullResponse: cleaned });
+            sseJson(res, { type: 'done', elapsed, tokens, fullResponse });
           }
         } catch {}
       }
