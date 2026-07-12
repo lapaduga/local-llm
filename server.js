@@ -39,26 +39,56 @@ async function ensureModel(res, modelTag) {
   }
 }
 
-const PROMPT_TEMPLATE = `Напиши 3 хокку на тему: {user_message}
+const PROMPT_TEMPLATE = `Ты — поэт хокку. Напиши ровно 3 хокку на тему: {user_message}
 
-Отвечай ТОЛЬКО на русском языке. Без пояснений и комментариев.
+Правила:
+- ТОЛЬКО русский язык
+- Каждое хокку — ровно 3 строки
+- Между хокку — пустая строка
+- Никакого текста кроме хокку
 
-Формат ответа — ровно так, как показано below (каждая строка хокку идёт с нового абзаца):
+Пример формата (строго соблюдай):
 
-первая строка хокку
-вторая строка хокku
-третья строка хокку
+Волна плещет
+Ледяной струёй
+Рождение весны
 
-первая строка второго хокку
-вторая строка второго хокku
-третья строка второго хокku
+Огонь жжёт
+Дерево мудрое
+Колыбель ночи
 
-первая строка третьего хокку
-вторая строка третьего хокku
-третья строка третьего хокku`;
+Пузыри плывут
+Под гладью реки
+Ледяной зимы`;
 
 function buildPrompt(userMessage) {
   return PROMPT_TEMPLATE.replace('{user_message}', userMessage);
+}
+
+function postProcessHaiku(text) {
+  let t = text.trim();
+  if (t.split('\n').filter(l => l.trim()).length >= 9) return t;
+  t = t.replace(/\s+/g, ' ').trim();
+  const words = t.split(' ');
+  const lines = [];
+  let line = [];
+  for (let i = 0; i < words.length; i++) {
+    line.push(words[i]);
+    const next = words[i + 1] || '';
+    const isNewline = (i > 0 && /^[А-ЯЁ]/.test(words[i]) && /[а-яё.,!?;:]$/.test(words[i - 1])) ||
+      (lines.length % 4 === 3 && i > 0);
+    if (isNewline || line.length >= 6) {
+      lines.push(line.join(' '));
+      line = [];
+    }
+  }
+  if (line.length) lines.push(line.join(' '));
+  const result = [];
+  for (let i = 0; i < lines.length; i++) {
+    result.push(lines[i]);
+    if (i % 3 === 2 && i < lines.length - 1) result.push('');
+  }
+  return result.join('\n');
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -132,6 +162,7 @@ app.post('/api/chat', async (req, res) => {
     const reader = ollamaRes.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let fullText = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -146,12 +177,14 @@ app.post('/api/chat', async (req, res) => {
         try {
           const parsed = JSON.parse(line);
           if (parsed.message && parsed.message.content) {
+            fullText += parsed.message.content;
             sseJson(res, { type: 'token', content: parsed.message.content });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const tokens = parsed.eval_count || 0;
-            sseJson(res, { type: 'done', elapsed, tokens });
+            const processed = postProcessHaiku(fullText);
+            sseJson(res, { type: 'done', elapsed, tokens, fullText: processed });
           }
         } catch {}
       }

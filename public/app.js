@@ -164,6 +164,10 @@ function sendMessage() {
           }
           if (e.type === 'status') setStatus(e.text);
           if (e.type === 'done') {
+            if (llmMessage && e.fullText) {
+              llmMessage.textContent = e.fullText;
+              llmMessage.innerHTML = renderMarkdown(llmMessage.textContent);
+            }
             showTokens(true);
             tokensEl.textContent = `${e.tokens} токенов за ${e.elapsed} с`;
           }
