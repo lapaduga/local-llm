@@ -40,7 +40,7 @@ async function ensureModel(res, modelTag) {
 }
 
 function buildPrompt(userMessage) {
-  return `Напиши 3 хокку на тему "${user_message}". Только русские слова. Без пояснений.
+  return `Напиши 3 хокку на тему "${userMessage}". Только русские слова. Без пояснений.
 
 Хокку 1:
 строка 1
