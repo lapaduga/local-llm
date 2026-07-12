@@ -11,8 +11,7 @@
   <div id="app">
     <header>
       <h1>Хокку</h1>
-      <div id="header-right">
-        <div id="ram-info"></div>
+              <div id="header-right">
         <button id="settings-btn" title="Параметры модели">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
@@ -62,13 +61,6 @@
         </div>
       </div>
 
-      <div id="context-bar">
-        <div id="context-bar-label">Контекст: <span id="ctx-used">0</span> / <span id="ctx-max">4096</span> токенов</div>
-        <div id="ctx-progress-track">
-          <div id="ctx-progress-fill"></div>
-        </div>
-      </div>
-
       <div id="status-bar">
         <span id="status-text">Готово</span>
         <span id="timer" class="hidden"></span>
@@ -76,10 +68,9 @@
       </div>
 
       <div id="input-area">
-        <div id="input-token-hint">~<span id="input-tokens">0</span> токенов в запросе</div>
-        <textarea id="message-input" placeholder="Опиши ситуацию: где вы, о чём говорите, как она выглядит..." rows="3"></textarea>
+        <textarea id="message-input" placeholder="Напиши тему для хокку..." rows="3"></textarea>
         <div id="buttons">
-          <button id="send-btn">Подкатить</button>
+          <button id="send-btn">Отправить</button>
           <button id="cancel-btn" class="hidden">Отменить</button>
           <button id="clear-btn">Очистить</button>
         </div>

@@ -6,7 +6,6 @@ const messagesEl = document.getElementById('messages');
 const statusText = document.getElementById('status-text');
 const timerEl = document.getElementById('timer');
 const tokensEl = document.getElementById('tokens-stat');
-const ramInfo = document.getElementById('ram-info');
 const errorContainer = document.getElementById('error-container');
 const errorContent = document.getElementById('error-content');
 const settingsBtn = document.getElementById('settings-btn');
@@ -19,69 +18,41 @@ const tempValue = document.getElementById('temp-value');
 const tempHint = document.getElementById('temp-hint');
 const tokensSlider = document.getElementById('tokens-slider');
 const tokensValue = document.getElementById('tokens-value');
-const inputTokensEl = document.getElementById('input-tokens');
-const ctxUsedEl = document.getElementById('ctx-used');
-const ctxMaxEl = document.getElementById('ctx-max');
-const ctxProgressFill = document.getElementById('ctx-progress-fill');
 
-const NUM_CTX = 8192;
-const PROMPT_TEMPLATE_OVERHEAD = 350;
+const STORAGE_KEY = 'haiku-settings';
 
 let timerInterval = null;
 let startTime = 0;
 
-const STORAGE_KEY = 'rizzgpt-settings';
-
-const defaultSettings = {
-  temperature: 0.8,
-  maxTokens: 384
-};
-
 function loadSettings() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return { ...defaultSettings, ...parsed };
-    }
+    if (saved) return { temperature: 0.8, maxTokens: 384, ...JSON.parse(saved) };
   } catch {}
-  return { ...defaultSettings };
+  return { temperature: 0.8, maxTokens: 384 };
 }
 
 function saveSettings() {
-  const settings = {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
     temperature: parseFloat(tempValue.value),
     maxTokens: parseInt(tokensValue.value)
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  }));
 }
 
-function applySettings(settings) {
-  tempSlider.value = settings.temperature;
-  tempValue.value = settings.temperature;
-  tokensSlider.value = settings.maxTokens;
-  tokensValue.value = settings.maxTokens;
-  updateTempHint(settings.temperature);
+function applySettings(s) {
+  tempSlider.value = s.temperature;
+  tempValue.value = s.temperature;
+  tokensSlider.value = s.maxTokens;
+  tokensValue.value = s.maxTokens;
 }
 
-function updateTempHint(temp) {
-  if (temp > 1.2) {
-    tempHint.textContent = 'Высокая температура — модель может галлюцинировать';
-    tempHint.classList.add('warning');
-  } else if (temp >= 0.7) {
-    tempHint.textContent = '0.3–0.5: сценарии | 0.7–1.0: креатив | 1.2+: хаос';
-    tempHint.classList.remove('warning');
-  } else {
-    tempHint.textContent = 'Низкая температура — стабильные шаблоны, меньше креатива';
-    tempHint.classList.remove('warning');
-  }
-}
-
-// Settings panel toggle
 settingsBtn.addEventListener('click', () => {
   settingsPanel.classList.add('open');
   settingsOverlay.classList.remove('hidden');
 });
+
+settingsClose.addEventListener('click', closeSettings);
+settingsOverlay.addEventListener('click', closeSettings);
 
 function closeSettings() {
   settingsPanel.classList.remove('open');
@@ -89,108 +60,25 @@ function closeSettings() {
   saveSettings();
 }
 
-settingsClose.addEventListener('click', closeSettings);
-settingsOverlay.addEventListener('click', closeSettings);
+tempSlider.addEventListener('input', () => { tempValue.value = tempSlider.value; saveSettings(); });
+tempValue.addEventListener('input', () => { tempSlider.value = tempValue.value; saveSettings(); });
+tokensSlider.addEventListener('input', () => { tokensValue.value = tokensSlider.value; saveSettings(); });
+tokensValue.addEventListener('input', () => { tokensSlider.value = tokensValue.value; saveSettings(); });
 
-// Slider sync
-tempSlider.addEventListener('input', () => {
-  tempValue.value = tempSlider.value;
-  updateTempHint(parseFloat(tempSlider.value));
-  saveSettings();
-});
-
-tempValue.addEventListener('input', () => {
-  let v = parseFloat(tempValue.value);
-  if (isNaN(v)) v = 0.8;
-  v = Math.max(0, Math.min(2, v));
-  tempSlider.value = v;
-  updateTempHint(v);
-  saveSettings();
-});
-
-tokensSlider.addEventListener('input', () => {
-  tokensValue.value = tokensSlider.value;
-  saveSettings();
-});
-
-tokensValue.addEventListener('input', () => {
-  let v = parseInt(tokensValue.value);
-  if (isNaN(v)) v = 384;
-  v = Math.max(64, Math.min(1024, v));
-  tokensSlider.value = v;
-  saveSettings();
-});
-
-
-// Token estimation
-function estimateTokens(text) {
-  if (!text) return 0;
-  const CyrillicChars = (text.match(/[\u0400-\u04FF]/g) || []).length;
-  const asciiChars = text.length - CyrillicChars;
-  return Math.ceil(CyrillicChars / 1.5) + Math.ceil(asciiChars / 4);
-}
-
-function updateInputTokenCount() {
-  const text = messageInput.value;
-  const tokens = estimateTokens(text);
-  inputTokensEl.textContent = tokens;
-}
-
-function updateContextBar(usedTokens) {
-  ctxUsedEl.textContent = usedTokens;
-  ctxMaxEl.textContent = NUM_CTX;
-  const pct = Math.min(100, (usedTokens / NUM_CTX) * 100);
-  ctxProgressFill.style.width = pct + '%';
-  ctxProgressFill.className = '';
-  if (pct > 80) ctxProgressFill.classList.add('danger');
-  else if (pct > 60) ctxProgressFill.classList.add('warn');
-}
-
-messageInput.addEventListener('input', updateInputTokenCount);
-
-// Initial context bar
-updateContextBar(PROMPT_TEMPLATE_OVERHEAD);
-
-// RAM stats
-function updateRam() {
-  fetch('/api/stats')
-    .then(r => r.json())
-    .then(d => {
-      ramInfo.textContent = `RAM: ${d.used} MB / ${d.total} MB (${d.percent}%)`;
-    })
-    .catch(() => {});
-}
-
-setInterval(updateRam, 5000);
-updateRam();
-
-// Status helpers
-function setStatus(text) {
-  statusText.textContent = text;
-}
-
-function showTimer(show) {
-  timerEl.classList.toggle('hidden', !show);
-}
-
-function showTokens(show) {
-  tokensEl.classList.toggle('hidden', !show);
-}
+function setStatus(text) { statusText.textContent = text; }
+function showTimer(show) { timerEl.classList.toggle('hidden', !show); }
+function showTokens(show) { tokensEl.classList.toggle('hidden', !show); }
 
 function startTimer() {
   startTime = Date.now();
   showTimer(true);
   timerInterval = setInterval(() => {
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    timerEl.textContent = `${elapsed} с`;
+    timerEl.textContent = `${((Date.now() - startTime) / 1000).toFixed(1)} с`;
   }, 100);
 }
 
 function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
 }
 
 function escapeHtml(text) {
@@ -200,19 +88,7 @@ function escapeHtml(text) {
 }
 
 function renderMarkdown(text) {
-  let html = escapeHtml(text);
-
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code class="lang-${lang}">${code}</code></pre>`;
-  });
-
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-  html = html.replace(/\n/g, '<br>');
-
-  return html;
+  return escapeHtml(text).replace(/\n/g, '<br>');
 }
 
 function addMessage(text, type) {
@@ -224,27 +100,13 @@ function addMessage(text, type) {
   return div;
 }
 
-function showError(title, details) {
+function showError(text) {
   errorContainer.classList.remove('hidden');
-  let html = `<h3>${escapeHtml(title)}</h3>`;
-  if (Array.isArray(details)) {
-    html += '<ol>';
-    details.forEach(d => { html += `<li>${escapeHtml(d)}</li>`; });
-    html += '</ol>';
-  } else {
-    html += `<p>${escapeHtml(String(details))}</p>`;
-  }
-  errorContent.innerHTML = html;
+  errorContent.innerHTML = `<p>${escapeHtml(text)}</p>`;
 }
 
-function hideError() {
-  errorContainer.classList.add('hidden');
-}
-
-function setLoading(loading) {
-  sendBtn.disabled = loading;
-  messageInput.disabled = loading;
-}
+function hideError() { errorContainer.classList.add('hidden'); }
+function setLoading(loading) { sendBtn.disabled = loading; messageInput.disabled = loading; }
 
 let currentRequestId = null;
 
@@ -260,38 +122,23 @@ function sendMessage() {
   setStatus('Отправка...');
   startTimer();
 
-  const settings = {
-    temperature: parseFloat(tempValue.value) || 0.8,
-    maxTokens: parseInt(tokensValue.value) || 384
-  };
-
   fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text, ...settings })
+    body: JSON.stringify({ message: text, temperature: parseFloat(tempValue.value), maxTokens: parseInt(tokensValue.value) })
   }).then(async (response) => {
     if (response.status === 503) {
-      const err = await response.json();
-      showError(err.error, err.instructions);
-      setStatus('Ошибка');
-      setLoading(false);
-      cancelBtn.classList.add('hidden');
-      stopTimer();
-      showTimer(false);
+      showError('Ollama не запущен');
+      finish();
       return;
     }
-
     if (!response.ok) {
-      setStatus('Ошибка');
-      setLoading(false);
-      cancelBtn.classList.add('hidden');
-      stopTimer();
-      showTimer(false);
+      showError('Ошибка сервера');
+      finish();
       return;
     }
 
     let llmMessage = null;
-
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -305,56 +152,43 @@ function sendMessage() {
       buffer = parts.pop() || '';
 
       for (const part of parts) {
-        if (part.startsWith('data: ')) {
-          const jsonStr = part.slice(6);
-          if (!jsonStr) continue;
-          try {
-            const event = JSON.parse(jsonStr);
-            switch (event.type) {
-              case 'requestId':
-                currentRequestId = event.id;
-                break;
-              case 'token':
-                if (!llmMessage) {
-                  llmMessage = addMessage('', 'llm');
-                }
-                llmMessage.textContent += event.content;
-                llmMessage.innerHTML = renderMarkdown(llmMessage.textContent);
-                messagesEl.scrollTop = messagesEl.scrollHeight;
-                break;
-              case 'status':
-                setStatus(event.text);
-                break;
-              case 'done':
-                stopTimer();
-                showTimer(false);
-                showTokens(true);
-                tokensEl.textContent = `${event.tokens} токенов за ${event.elapsed} с`;
-                updateContextBar(PROMPT_TEMPLATE_OVERHEAD + estimateTokens(text) + event.tokens);
-                break;
-              case 'error':
-                showError('Ошибка', event.text);
-                setStatus('Ошибка');
-                break;
-            }
-          } catch (e) {
-            console.warn('Parse error:', e);
+        if (!part.startsWith('data: ')) continue;
+        try {
+          const e = JSON.parse(part.slice(6));
+          if (e.type === 'requestId') currentRequestId = e.id;
+          if (e.type === 'token') {
+            if (!llmMessage) llmMessage = addMessage('', 'llm');
+            llmMessage.textContent += e.content;
+            llmMessage.innerHTML = renderMarkdown(llmMessage.textContent);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
           }
-        }
+          if (e.type === 'status') setStatus(e.text);
+          if (e.type === 'done') {
+            showTokens(true);
+            tokensEl.textContent = `${e.tokens} токенов за ${e.elapsed} с`;
+          }
+          if (e.type === 'error') showError(e.text);
+        } catch {}
       }
     }
 
     currentRequestId = null;
     setLoading(false);
     cancelBtn.classList.add('hidden');
-  }).catch((err) => {
-    showError('Ошибка соединения', err.message);
-    setStatus('Ошибка');
-    setLoading(false);
-    cancelBtn.classList.add('hidden');
     stopTimer();
     showTimer(false);
+  }).catch(() => {
+    showError('Ошибка соединения');
+    finish();
   });
+}
+
+function finish() {
+  setLoading(false);
+  cancelBtn.classList.add('hidden');
+  stopTimer();
+  showTimer(false);
+  setStatus('Ошибка');
 }
 
 function cancelGeneration() {
@@ -366,31 +200,14 @@ function cancelGeneration() {
     }).catch(() => {});
   }
   currentRequestId = null;
-  setStatus('Генерация отменена');
-  setLoading(false);
-  cancelBtn.classList.add('hidden');
-  stopTimer();
-  showTimer(false);
+  finish();
 }
 
-// Init
-const savedSettings = loadSettings();
-applySettings(savedSettings);
-
+applySettings(loadSettings());
 sendBtn.addEventListener('click', sendMessage);
 cancelBtn.addEventListener('click', cancelGeneration);
 clearBtn.addEventListener('click', () => {
-  messagesEl.innerHTML = `
-    <div class="message llm welcome-msg">
-      Привет! Я генератор хокку. Напиши тему — получишь 3 стихотворения хокку.
-    </div>
-  `;
+  messagesEl.innerHTML = `<div class="message llm welcome-msg">Привет! Напиши тему — получишь 3 хокку.</div>`;
   hideError();
 });
-
-messageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-});
+messageInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });

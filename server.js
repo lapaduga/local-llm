@@ -1,46 +1,17 @@
 const express = require('express');
-const os = require('os');
 
 const app = express();
 app.use(express.json({ limit: '10kb' }));
 app.use(express.static('public'));
 
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  next();
-});
-
 const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
 const MODEL_BASE = process.env.MODEL || 'qwen2.5:3b';
 const MAX_THREADS = parseInt(process.env.MAX_THREADS) || 4;
-
 const MODEL_TAG = MODEL_BASE;
-
 const NUM_CTX = 8192;
 const NUM_BATCH = 512;
 
 const activeRequests = new Map();
-
-function logRamUsage() {
-  const free = os.freemem();
-  const total = os.totalmem();
-  const used = total - free;
-  const percent = ((used / total) * 100).toFixed(1);
-  console.log(`[RAM] ${(used / 1024 / 1024 / 1024).toFixed(1)} GB / ${(total / 1024 / 1024 / 1024).toFixed(1)} GB (${percent}%)`);
-}
-
-function ramStats() {
-  const free = os.freemem();
-  const total = os.totalmem();
-  return {
-    free: Math.floor(free / 1024 / 1024),
-    total: Math.floor(total / 1024 / 1024),
-    used: Math.floor((total - free) / 1024 / 1024),
-    percent: Number(((total - free) / total * 100).toFixed(1)),
-    cores: os.cpus().length,
-    cpuModel: os.cpus()[0]?.model || 'Unknown'
-  };
-}
 
 async function checkOllama() {
   try {
@@ -61,18 +32,12 @@ async function ensureModel(res, modelTag) {
     const list = await listRes.json();
     const hasModel = (list.models || []).some(m => m.name === modelTag || m.name.startsWith(modelTag + ':'));
     if (hasModel) return true;
-
     sseJson(res, { type: 'error', text: `Модель ${modelTag} не найдена на сервере` });
     return false;
-  } catch (err) {
+  } catch {
     return false;
   }
 }
-
-app.get('/api/stats', (req, res) => {
-  res.json(ramStats());
-});
-
 
 const PROMPT_TEMPLATE = `Напиши 3 хокку на тему: {user_message}
 
@@ -107,15 +72,7 @@ app.post('/api/chat', async (req, res) => {
 
   const ollamaOk = await checkOllama();
   if (!ollamaOk) {
-    return res.status(503).json({
-      error: 'Ollama не запущен',
-      instructions: [
-        'Установите Ollama: https://ollama.com/download',
-        'Запустите в терминале: ollama serve',
-        'Убедитесь, что сервер доступен на http://localhost:11434',
-        'Затем перезагрузите эту страницу'
-      ]
-    });
+    return res.status(503).json({ error: 'Ollama не запущен' });
   }
 
   const requestId = Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -133,7 +90,6 @@ app.post('/api/chat', async (req, res) => {
 
   const modelReady = await ensureModel(res, MODEL_TAG);
   if (!modelReady) {
-    sseJson(res, { type: 'error', text: 'Не удалось подготовить модель' });
     activeRequests.delete(requestId);
     res.end();
     return;
@@ -143,8 +99,6 @@ app.post('/api/chat', async (req, res) => {
   const safeTemp = Math.max(0, Math.min(2, parseFloat(temperature) || 0.8));
   const safeTokens = Math.max(64, Math.min(1024, parseInt(maxTokens) || 384));
   const prompt = buildPrompt(message);
-
-  sseJson(res, { type: 'status', text: `Модель: ${MODEL_TAG} | temp=${safeTemp} | tokens=${safeTokens} | ctx=${NUM_CTX}` });
 
   try {
     const ollamaRes = await fetch(`${OLLAMA_HOST}/api/chat`, {
@@ -169,18 +123,15 @@ app.post('/api/chat', async (req, res) => {
     });
 
     if (!ollamaRes.ok) {
-      sseJson(res, { type: 'error', text: 'Ошибка модели. Попробуйте ещё раз' });
+      sseJson(res, { type: 'error', text: 'Ошибка модели' });
       activeRequests.delete(requestId);
       res.end();
       return;
     }
 
-    sseJson(res, { type: 'status', text: 'Генерация...' });
-
     const reader = ollamaRes.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let fullResponse = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -195,27 +146,23 @@ app.post('/api/chat', async (req, res) => {
         try {
           const parsed = JSON.parse(line);
           if (parsed.message && parsed.message.content) {
-            fullResponse += parsed.message.content;
             sseJson(res, { type: 'token', content: parsed.message.content });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const tokens = parsed.eval_count || 0;
-            sseJson(res, { type: 'done', elapsed, tokens, fullResponse });
+            sseJson(res, { type: 'done', elapsed, tokens });
           }
         } catch {}
       }
     }
   } catch (err) {
-    if (err.name === 'AbortError') {
-      sseJson(res, { type: 'status', text: 'Генерация отменена' });
-    } else {
+    if (err.name !== 'AbortError') {
       sseJson(res, { type: 'error', text: 'Ошибка при генерации' });
     }
   }
 
   activeRequests.delete(requestId);
-  sseJson(res, { type: 'status', text: 'Готово' });
   res.end();
 });
 
@@ -233,7 +180,7 @@ const PORT = process.env.PORT || 3000;
 
 async function preloadModel() {
   try {
-    console.log(`[INFO] Preloading model ${MODEL_TAG}...`);
+    console.log(`[INFO] Preloading ${MODEL_TAG}...`);
     const start = Date.now();
     await fetch(`${OLLAMA_HOST}/api/chat`, {
       method: 'POST',
@@ -245,23 +192,13 @@ async function preloadModel() {
 }
 
 async function start() {
-  console.log(`[INFO] Проверка Ollama...`);
   const ollamaOk = await checkOllama();
-  if (!ollamaOk) {
-    console.log(`[WARN] Ollama не обнаружен на ${OLLAMA_HOST}`);
-    console.log(`[WARN] Запустите: ollama serve`);
-  } else {
-    console.log(`[INFO] Ollama доступен на ${OLLAMA_HOST}`);
+  if (ollamaOk) {
     await preloadModel();
+  } else {
+    console.log(`[WARN] Ollama not found on ${OLLAMA_HOST}`);
   }
-
-  const stats = ramStats();
-  app.listen(PORT, () => {
-    console.log(`[INFO] Сервер запущен на http://localhost:${PORT}`);
-    console.log(`[INFO] CPU: ${stats.cpuModel} (${stats.cores} cores)`);
-    console.log(`[INFO] RAM: ${(stats.total / 1024).toFixed(1)} GB`);
-    logRamUsage();
-  });
+  app.listen(PORT, () => console.log(`[INFO] Server on port ${PORT}`));
 }
 
 start();
