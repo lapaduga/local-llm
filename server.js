@@ -40,7 +40,7 @@ async function ensureModel(res, modelTag) {
 }
 
 function buildPrompt(userMessage) {
-  return `Напиши 3 коротких хокку на тему "${user_message}". Только русские слова. Без пояснений.
+  return `Напиши 3 хокку на тему "${user_message}". Только русские слова. Без пояснений.
 
 Хокку 1:
 строка 1
@@ -58,55 +58,6 @@ function buildPrompt(userMessage) {
 строка 3
 
 Ответ:`;
-}
-
-function postProcessHaiku(text) {
-  let t = text.trim();
-
-  t = t.replace(/[\u4e00-\u9fff\u3400-\u4dbf]+/g, ' ');
-
-  t = t.replace(/Хокку \d:/g, '');
-
-  t = t.replace(/\s+/g, ' ').trim();
-
-  if (!t) return text.trim();
-
-  let lines = t.split(/\n/).filter(l => l.trim());
-  if (lines.length >= 9) {
-    return lines.slice(0, 9).join('\n');
-  }
-
-  const words = t.split(' ');
-  const result = [];
-  let currentLine = [];
-
-  for (let i = 0; i < words.length; i++) {
-    const w = words[i];
-    if (!w) continue;
-
-    currentLine.push(w);
-
-    const isWordEnd = (i < words.length - 1 && /^[А-ЯЁ]/.test(words[i + 1])) || i === words.length - 1;
-
-    if (isWordEnd && currentLine.length >= 2) {
-      result.push(currentLine.join(' '));
-      currentLine = [];
-      if (result.length % 3 === 0 && result.length < 9 && i < words.length - 1) {
-      }
-    }
-  }
-
-  if (currentLine.length) {
-    result.push(currentLine.join(' '));
-  }
-
-  const final = [];
-  for (let i = 0; i < Math.min(result.length, 9); i++) {
-    final.push(result[i]);
-    if (i % 3 === 2 && i < 8) final.push('');
-  }
-
-  return final.length >= 3 ? final.join('\n') : t;
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -181,7 +132,6 @@ app.post('/api/chat', async (req, res) => {
     const reader = ollamaRes.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-    let fullText = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -196,14 +146,12 @@ app.post('/api/chat', async (req, res) => {
         try {
           const parsed = JSON.parse(line);
           if (parsed.response) {
-            fullText += parsed.response;
             sseJson(res, { type: 'token', content: parsed.response });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const tokens = parsed.eval_count || 0;
-            const processed = postProcessHaiku(fullText);
-            sseJson(res, { type: 'done', elapsed, tokens, fullText: processed });
+            sseJson(res, { type: 'done', elapsed, tokens });
           }
         } catch {}
       }
