@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RizzGPT — Юмористические подкаты</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>RizzGPT</h1>
+      <div id="header-right">
+        <div id="ram-info"></div>
+        <button id="settings-btn" title="Параметры модели">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="settings-overlay" class="hidden"></div>
+    <aside id="settings-panel">
+      <div class="settings-header">
+        <h2>Параметры модели</h2>
+        <button id="settings-close">&times;</button>
+      </div>
+      <div class="settings-body">
+        <div class="setting-group">
+          <label>Креативность (temperature)</label>
+          <div class="slider-row">
+            <input type="range" id="temp-slider" min="0" max="2" step="0.05" value="0.8">
+            <input type="number" id="temp-value" min="0" max="2" step="0.05" value="0.8">
+          </div>
+          <div class="setting-hint" id="temp-hint">0.3–0.5: сценарии | 0.7–1.0: креатив | 1.2+: хаос</div>
+        </div>
+
+        <div class="setting-group">
+          <label>Длина ответа (max tokens)</label>
+          <div class="slider-row">
+            <input type="range" id="tokens-slider" min="64" max="1024" step="64" value="384">
+            <input type="number" id="tokens-value" min="64" max="1024" step="64" value="384">
+          </div>
+          <div class="setting-hint">Рекомендуется 256–512. 1024 — максимум для CPU</div>
+        </div>
+
+        <div class="setting-group">
+          <label>Стратегия контекста</label>
+          <select id="context-select">
+            <option value="unload">Выгрузка после ответа (экономия RAM)</option>
+            <option value="5min" selected>Удержание 5 мин</option>
+            <option value="10min">Удержание 10 мин (многошаговые диалоги)</option>
+          </select>
+          <div class="setting-hint">Модель остаётся в RAM между запросами — быстрый повторный ответ</div>
+        </div>
+
+        <div class="setting-group hardware-info">
+          <label>Железо</label>
+          <div id="hw-info-text">Загрузка...</div>
+        </div>
+      </div>
+    </aside>
+
+    <main>
+      <div id="error-container" class="hidden">
+        <div id="error-content"></div>
+      </div>
+
+      <div id="chat-container">
+        <div id="messages">
+          <div class="message llm welcome-msg">
+            Привет! Я RizzGPT — генератор юмористических подкатов. Опиши ситуацию или девушку, а я предложу 3 дерзких варианта с рейтингом.
+          </div>
+        </div>
+      </div>
+
+      <div id="context-bar">
+        <div id="context-bar-label">Контекст: <span id="ctx-used">0</span> / <span id="ctx-max">4096</span> токенов</div>
+        <div id="ctx-progress-track">
+          <div id="ctx-progress-fill"></div>
+        </div>
+      </div>
+
+      <div id="status-bar">
+        <span id="status-text">Готово</span>
+        <span id="timer" class="hidden"></span>
+        <span id="tokens-stat" class="hidden"></span>
+      </div>
+
+      <div id="input-area">
+        <div id="input-token-hint">~<span id="input-tokens">0</span> токенов в запросе</div>
+        <textarea id="message-input" placeholder="Опиши ситуацию: где вы, о чём говорите, как она выглядит..." rows="3"></textarea>
+        <div id="buttons">
+          <button id="send-btn">Подкатить</button>
+          <button id="cancel-btn" class="hidden">Отменить</button>
+          <button id="clear-btn">Очистить</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

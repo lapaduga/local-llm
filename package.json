@@ -1,0 +1,12 @@
+{
+  "name": "local-llm-demo",
+  "version": "1.0.0",
+  "description": "Lightweight web chat with local LLM via Ollama",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
