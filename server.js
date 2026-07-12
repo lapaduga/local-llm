@@ -74,33 +74,23 @@ app.get('/api/stats', (req, res) => {
 });
 
 
-const PROMPT_TEMPLATE = `Ты — мастер японской поэзии. Генерируешь хокку на заданную тему.
+const PROMPT_TEMPLATE = `Напиши 3 хокку на тему: {user_message}
 
-Тема: {user_message}
+Отвечай ТОЛЬКО на русском языке. Без пояснений и комментариев.
 
-Сгенерируй 3 хокку. Формат — каждое хокку это ровно 3 строки:
+Формат ответа — ровно так, как показано below (каждая строка хокку идёт с нового абзаца):
 
-строка 1 (5 слогов)
-строка 2 (7 слогов)
-строка 3 (5 слогов)
+первая строка хокку
+вторая строка хокku
+третья строка хокку
 
-(пустая строка)
+первая строка второго хокку
+вторая строка второго хокku
+третья строка второго хокku
 
-строка 1
-строка 2
-строка 3
-
-(пустая строка)
-
-строка 1
-строка 2
-строка 3
-
-Правила:
-- между хокку обязательно пустая строка
-- каждая строка хокку на отдельной строке
-- яркие образы из природы
-- лаконичность`;
+первая строка третьего хокку
+вторая строка третьего хокku
+третья строка третьего хокku`;
 
 function buildPrompt(userMessage) {
   return PROMPT_TEMPLATE.replace('{user_message}', userMessage);
@@ -205,13 +195,20 @@ app.post('/api/chat', async (req, res) => {
         try {
           const parsed = JSON.parse(line);
           if (parsed.response) {
-            fullResponse += parsed.response;
-            sseJson(res, { type: 'token', content: parsed.response });
+            const token = parsed.response
+              .replace(/\\\n/g, '\n')
+              .replace(/\\n/g, '\n');
+            fullResponse += token;
+            sseJson(res, { type: 'token', content: token });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
             const tokens = parsed.eval_count || 0;
-            sseJson(res, { type: 'done', elapsed, tokens, fullResponse });
+            const cleaned = fullResponse
+              .replace(/\\\n/g, '\n')
+              .replace(/\\n/g, '\n')
+              .replace(/\n{3,}/g, '\n\n');
+            sseJson(res, { type: 'done', elapsed, tokens, fullResponse: cleaned });
           }
         } catch {}
       }
