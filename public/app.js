@@ -26,7 +26,7 @@ const ctxUsedEl = document.getElementById('ctx-used');
 const ctxMaxEl = document.getElementById('ctx-max');
 const ctxProgressFill = document.getElementById('ctx-progress-fill');
 
-const NUM_CTX = 4096;
+const NUM_CTX = 8192;
 const PROMPT_TEMPLATE_OVERHEAD = 350;
 
 let timerInterval = null;
