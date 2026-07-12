@@ -19,7 +19,6 @@ const tempValue = document.getElementById('temp-value');
 const tempHint = document.getElementById('temp-hint');
 const tokensSlider = document.getElementById('tokens-slider');
 const tokensValue = document.getElementById('tokens-value');
-const contextSelect = document.getElementById('context-select');
 const hwInfoText = document.getElementById('hw-info-text');
 
 const inputTokensEl = document.getElementById('input-tokens');
@@ -37,8 +36,7 @@ const STORAGE_KEY = 'rizzgpt-settings';
 
 const defaultSettings = {
   temperature: 0.8,
-  maxTokens: 384,
-  contextStrategy: '5min'
+  maxTokens: 384
 };
 
 function loadSettings() {
@@ -55,8 +53,7 @@ function loadSettings() {
 function saveSettings() {
   const settings = {
     temperature: parseFloat(tempValue.value),
-    maxTokens: parseInt(tokensValue.value),
-    contextStrategy: contextSelect.value
+    maxTokens: parseInt(tokensValue.value)
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
 }
@@ -66,7 +63,6 @@ function applySettings(settings) {
   tempValue.value = settings.temperature;
   tokensSlider.value = settings.maxTokens;
   tokensValue.value = settings.maxTokens;
-  contextSelect.value = settings.contextStrategy;
   updateTempHint(settings.temperature);
 }
 
@@ -127,7 +123,6 @@ tokensValue.addEventListener('input', () => {
   saveSettings();
 });
 
-contextSelect.addEventListener('change', saveSettings);
 
 // Token estimation
 function estimateTokens(text) {
@@ -223,7 +218,7 @@ function renderMarkdown(text) {
   let html = escapeHtml(text);
 
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-    return `<pre><code>${escapeHtml(code)}</code></pre>`;
+    return `<pre><code class="lang-${lang}">${code}</code></pre>`;
   });
 
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -237,7 +232,49 @@ function renderMarkdown(text) {
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
 
+  html = html.replace(/^---+$/gm, '<hr>');
+
+  html = html.replace(/^\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+  const lines = html.split('\n');
+  const result = [];
+  let inOl = false;
+  let inUl = false;
+
+  for (const line of lines) {
+    const olMatch = line.match(/^(\d+)\.\s+(.*)$/);
+    const ulMatch = line.match(/^[-*]\s+(.*)$/);
+
+    if (olMatch) {
+      if (!inOl) { if (inUl) { result.push('</ul>'); inUl = false; } result.push('<ol>'); inOl = true; }
+      result.push(`<li>${olMatch[2]}</li>`);
+    } else if (ulMatch) {
+      if (!inUl) { if (inOl) { result.push('</ol>'); inOl = false; } result.push('<ul>'); inUl = true; }
+      result.push(`<li>${ulMatch[1]}</li>`);
+    } else {
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      result.push(line);
+    }
+  }
+  if (inOl) result.push('</ol>');
+  if (inUl) result.push('</ul>');
+
+  html = result.join('\n');
+
   html = html.replace(/\n/g, '<br>');
+  html = html.replace(/<br>(<h[123]>)/g, '$1');
+  html = html.replace(/(<\/h[123]>)<br>/g, '$1');
+  html = html.replace(/<br>(<pre>)/g, '$1');
+  html = html.replace(/(<\/pre>)<br>/g, '$1');
+  html = html.replace(/<br>(<ol>)/g, '$1');
+  html = html.replace(/(<\/ol>)<br>/g, '$1');
+  html = html.replace(/<br>(<ul>)/g, '$1');
+  html = html.replace(/(<\/ul>)<br>/g, '$1');
+  html = html.replace(/<br>(<blockquote>)/g, '$1');
+  html = html.replace(/(<\/blockquote>)<br>/g, '$1');
+  html = html.replace(/<br>(<hr>)/g, '$1');
+  html = html.replace(/(<hr>)<br>/g, '$1');
 
   return html;
 }
@@ -287,8 +324,7 @@ function sendMessage() {
 
   const settings = {
     temperature: parseFloat(tempValue.value) || 0.8,
-    maxTokens: parseInt(tokensValue.value) || 384,
-    contextStrategy: contextSelect.value
+    maxTokens: parseInt(tokensValue.value) || 384
   };
 
   fetch('/api/chat', {

@@ -16,13 +16,8 @@ const MAX_THREADS = parseInt(process.env.MAX_THREADS) || 4;
 
 const MODEL_TAG = MODEL_BASE;
 
-const CONTEXT_STRATEGIES = {
-  'unload': '0',
-  '5min': '5m',
-  '10min': '10m'
-};
-
-const NUM_CTX = 4096;
+const NUM_CTX = 8192;
+const NUM_BATCH = 512;
 
 let isGenerating = false;
 let cancelRequested = false;
@@ -110,7 +105,7 @@ app.post('/api/chat', async (req, res) => {
     return res.status(429).json({ error: 'Модель занята, подождите завершения текущего запроса' });
   }
 
-  const { message, temperature, maxTokens, contextStrategy } = req.body;
+  const { message, temperature, maxTokens } = req.body;
   if (!message || !message.trim()) {
     return res.status(400).json({ error: 'Сообщение не может быть пустым' });
   }
@@ -155,10 +150,9 @@ app.post('/api/chat', async (req, res) => {
   const startTime = Date.now();
   const safeTemp = Math.max(0, Math.min(2, parseFloat(temperature) || 0.8));
   const safeTokens = Math.max(64, Math.min(1024, parseInt(maxTokens) || 384));
-  const keepAlive = CONTEXT_STRATEGIES[contextStrategy] || '0';
   const prompt = buildPrompt(message);
 
-  sseJson(res, { type: 'status', text: `Модель: ${MODEL_TAG} | temp=${safeTemp} | tokens=${safeTokens} | ctx=${NUM_CTX} | keep_alive=${keepAlive}` });
+  sseJson(res, { type: 'status', text: `Модель: ${MODEL_TAG} | temp=${safeTemp} | tokens=${safeTokens} | ctx=${NUM_CTX}` });
 
   try {
     const ollamaRes = await fetch(`${OLLAMA_HOST}/api/generate`, {
@@ -171,11 +165,12 @@ app.post('/api/chat', async (req, res) => {
         options: {
           num_gpu: 0,
           num_thread: MAX_THREADS,
+          num_batch: NUM_BATCH,
           temperature: safeTemp,
           top_p: 0.9,
           num_ctx: NUM_CTX,
           num_predict: safeTokens,
-          keep_alive: keepAlive
+          keep_alive: -1
         }
       }),
       signal: currentAbortController.signal
@@ -239,8 +234,6 @@ app.post('/api/chat', async (req, res) => {
   isGenerating = false;
   currentAbortController = null;
 
-  sseJson(res, { type: 'status', text: 'Выгрузка модели из RAM...' });
-  logRamUsage();
   sseJson(res, { type: 'status', text: 'Готово' });
   res.end();
 });
@@ -257,6 +250,19 @@ app.post('/api/cancel', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
+async function preloadModel() {
+  try {
+    console.log(`[INFO] Preloading model ${MODEL_TAG}...`);
+    const start = Date.now();
+    await fetch(`${OLLAMA_HOST}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL_TAG, prompt: '', keep_alive: -1 })
+    });
+    console.log(`[INFO] Model loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
+  } catch {}
+}
+
 async function start() {
   console.log(`[INFO] Проверка Ollama...`);
   const ollamaOk = await checkOllama();
@@ -265,6 +271,7 @@ async function start() {
     console.log(`[WARN] Запустите: ollama serve`);
   } else {
     console.log(`[INFO] Ollama доступен на ${OLLAMA_HOST}`);
+    await preloadModel();
   }
 
   const stats = ramStats();

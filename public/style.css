@@ -336,7 +336,9 @@ main {
 }
 .message strong { font-weight: 700; }
 .message em { font-style: italic; }
-.message a { color: var(--accent); }
+.message a { color: var(--accent); text-decoration: none; }
+.message a:hover { text-decoration: underline; }
+.message hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
 
 #status-bar {
   display: flex;
