@@ -199,8 +199,8 @@ app.post('/api/chat', async (req, res) => {
               .replace(/\\\n/g, '\n')
               .replace(/\\n/g, '\n')
               .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
-              .replace(/([а-яё])(\.)/g, '$1 $2')
-              .replace(/([а-яё])(,)/g, '$1 $2');
+              .replace(/([.!?])([А-ЯЁ])/g, '$1\n\n$2')
+              .replace(/,([А-ЯЁ])/g, ',\n$1');
             fullResponse += token;
             sseJson(res, { type: 'token', content: token });
           }
@@ -211,8 +211,8 @@ app.post('/api/chat', async (req, res) => {
               .replace(/\\\n/g, '\n')
               .replace(/\\n/g, '\n')
               .replace(/([а-яё])([А-ЯЁ])/g, '$1 $2')
-              .replace(/([а-яё])(\.)/g, '$1 $2')
-              .replace(/([а-яё])(,)/g, '$1 $2')
+              .replace(/([.!?])([А-ЯЁ])/g, '$1\n\n$2')
+              .replace(/,([А-ЯЁ])/g, ',\n$1')
               .replace(/\n{3,}/g, '\n\n')
               .trim();
             sseJson(res, { type: 'done', elapsed, tokens, fullResponse: cleaned });
