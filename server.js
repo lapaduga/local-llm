@@ -39,56 +39,74 @@ async function ensureModel(res, modelTag) {
   }
 }
 
-const PROMPT_TEMPLATE = `Ты — поэт хокку. Напиши ровно 3 хокку на тему: {user_message}
-
-Правила:
-- ТОЛЬКО русский язык
-- Каждое хокку — ровно 3 строки
-- Между хокку — пустая строка
-- Никакого текста кроме хокку
-
-Пример формата (строго соблюдай):
-
-Волна плещет
-Ледяной струёй
-Рождение весны
-
-Огонь жжёт
-Дерево мудрое
-Колыбель ночи
-
-Пузыри плывут
-Под гладью реки
-Ледяной зимы`;
-
 function buildPrompt(userMessage) {
-  return PROMPT_TEMPLATE.replace('{user_message}', userMessage);
+  return `Напиши 3 коротких хокку на тему "${user_message}". Только русские слова. Без пояснений.
+
+Хокку 1:
+строка 1
+строка 2
+строка 3
+
+Хокку 2:
+строка 1
+строка 2
+строка 3
+
+Хокку 3:
+строка 1
+строка 2
+строка 3
+
+Ответ:`;
 }
 
 function postProcessHaiku(text) {
   let t = text.trim();
-  if (t.split('\n').filter(l => l.trim()).length >= 9) return t;
+
+  t = t.replace(/[\u4e00-\u9fff\u3400-\u4dbf]+/g, ' ');
+
+  t = t.replace(/Хокку \d:/g, '');
+
   t = t.replace(/\s+/g, ' ').trim();
+
+  if (!t) return text.trim();
+
+  let lines = t.split(/\n/).filter(l => l.trim());
+  if (lines.length >= 9) {
+    return lines.slice(0, 9).join('\n');
+  }
+
   const words = t.split(' ');
-  const lines = [];
-  let line = [];
+  const result = [];
+  let currentLine = [];
+
   for (let i = 0; i < words.length; i++) {
-    line.push(words[i]);
-    const next = words[i + 1] || '';
-    const isNewline = (i > 0 && /^[А-ЯЁ]/.test(words[i]) && /[а-яё.,!?;:]$/.test(words[i - 1])) ||
-      (lines.length % 4 === 3 && i > 0);
-    if (isNewline || line.length >= 6) {
-      lines.push(line.join(' '));
-      line = [];
+    const w = words[i];
+    if (!w) continue;
+
+    currentLine.push(w);
+
+    const isWordEnd = (i < words.length - 1 && /^[А-ЯЁ]/.test(words[i + 1])) || i === words.length - 1;
+
+    if (isWordEnd && currentLine.length >= 2) {
+      result.push(currentLine.join(' '));
+      currentLine = [];
+      if (result.length % 3 === 0 && result.length < 9 && i < words.length - 1) {
+      }
     }
   }
-  if (line.length) lines.push(line.join(' '));
-  const result = [];
-  for (let i = 0; i < lines.length; i++) {
-    result.push(lines[i]);
-    if (i % 3 === 2 && i < lines.length - 1) result.push('');
+
+  if (currentLine.length) {
+    result.push(currentLine.join(' '));
   }
-  return result.join('\n');
+
+  const final = [];
+  for (let i = 0; i < Math.min(result.length, 9); i++) {
+    final.push(result[i]);
+    if (i % 3 === 2 && i < 8) final.push('');
+  }
+
+  return final.length >= 3 ? final.join('\n') : t;
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -131,12 +149,12 @@ app.post('/api/chat', async (req, res) => {
   const prompt = buildPrompt(message);
 
   try {
-    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/chat`, {
+    const ollamaRes = await fetch(`${OLLAMA_HOST}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: MODEL_TAG,
-        messages: [{ role: 'user', content: prompt }],
+        prompt: prompt,
         stream: true,
         options: {
           num_gpu: 0,
@@ -146,7 +164,8 @@ app.post('/api/chat', async (req, res) => {
           top_p: 0.9,
           num_ctx: NUM_CTX,
           num_predict: safeTokens,
-          keep_alive: -1
+          keep_alive: -1,
+          stop: ['Ответ:', '---']
         }
       }),
       signal: abortController.signal
@@ -176,9 +195,9 @@ app.post('/api/chat', async (req, res) => {
         if (!line.trim()) continue;
         try {
           const parsed = JSON.parse(line);
-          if (parsed.message && parsed.message.content) {
-            fullText += parsed.message.content;
-            sseJson(res, { type: 'token', content: parsed.message.content });
+          if (parsed.response) {
+            fullText += parsed.response;
+            sseJson(res, { type: 'token', content: parsed.response });
           }
           if (parsed.done) {
             const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -215,10 +234,10 @@ async function preloadModel() {
   try {
     console.log(`[INFO] Preloading ${MODEL_TAG}...`);
     const start = Date.now();
-    await fetch(`${OLLAMA_HOST}/api/chat`, {
+    await fetch(`${OLLAMA_HOST}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL_TAG, messages: [{ role: 'user', content: 'hi' }], keep_alive: -1, options: { num_ctx: NUM_CTX, num_predict: 1 } })
+      body: JSON.stringify({ model: MODEL_TAG, prompt: 'hi', stream: false, keep_alive: -1, options: { num_ctx: NUM_CTX, num_predict: 1 } })
     });
     console.log(`[INFO] Model loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
   } catch {}
