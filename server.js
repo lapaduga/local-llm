@@ -83,18 +83,20 @@ const PROMPT_TEMPLATE = `Ты — эксперт по флирту и юмори
 {user_message}
 ---
 
-Сгенерируй ровно 3 варианта подката. Формат:
-1. [текст подката] — рейтинг: X/10
-2. [текст подката] — рейтинг: X/10
-3. [текст подката] — рейтинг: X/10
+Сгенерируй ровно 3 варианта подката. Используй markdown-форматирование:
+1. **[текст подката]** — рейтинг: X/10
+   _Краткое пояснение рейтинга_
+2. **[текст подката]** — рейтинг: X/10
+   _Краткое пояснение рейтинга_
+3. **[текст подката]** — рейтинг: X/10
+   _Краткое пояснение рейтинга_
 
 Правила:
 - Будь дерзким и вульгарным, если просит пользователь
 - Используй игру слов, иронию, абсурд
 - Каждый подкат должен быть уникальным по стилю
-- Не используй markdown-разметку
-- Используй форматирование
-- Кратко поясни выбор рейтинга в одну строку после каждого`;
+- Используй **жирный** для текста подкатов
+- Используй _курсив_ для пояснений`;
 
 function buildPrompt(userMessage) {
   return PROMPT_TEMPLATE.replace('{user_message}', userMessage);
@@ -257,7 +259,7 @@ async function preloadModel() {
     await fetch(`${OLLAMA_HOST}/api/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL_TAG, prompt: '', keep_alive: -1 })
+      body: JSON.stringify({ model: MODEL_TAG, prompt: 'hi', keep_alive: -1, options: { num_ctx: NUM_CTX, num_predict: 1 } })
     });
     console.log(`[INFO] Model loaded in ${((Date.now() - start) / 1000).toFixed(1)}s`);
   } catch {}
